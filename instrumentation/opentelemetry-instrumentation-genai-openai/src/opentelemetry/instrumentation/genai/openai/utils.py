@@ -185,12 +185,24 @@ def create_chat_invocation(
         )
 
     if capture_content:  # optimization
-        invocation.input_messages = _prepare_input_messages(
-            kwargs.get("messages", [])
-        )
-        invocation.tool_definitions = _prepare_tool_definitions(
-            kwargs.get("tools")
-        )
+        # Materialize one-shot iterables so they aren't consumed before
+        # the wrapped API call (fixes #825).
+        messages_raw = kwargs.get("messages", [])
+        if messages_raw is not None and not isinstance(messages_raw, (list, tuple)):
+            try:
+                messages_raw = list(messages_raw)
+            except TypeError:
+                pass
+        tools_raw = kwargs.get("tools")
+        if tools_raw is not None and not isinstance(tools_raw, (list, tuple)):
+            try:
+                tools_raw = list(tools_raw)
+            except TypeError:
+                pass
+        # Update kwargs so the wrapped call also sees materialized inputs
+        kwargs = {**kwargs, "messages": messages_raw, "tools": tools_raw}
+        invocation.input_messages = _prepare_input_messages(messages_raw)
+        invocation.tool_definitions = _prepare_tool_definitions(tools_raw)
     return invocation
 
 
